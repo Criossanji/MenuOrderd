@@ -1,0 +1,375 @@
+(function(){
+  const restaurantPhone = '96170673328';
+  const ORDER_TYPE_KEY = 'croissanji_order_type_v1';
+  const PRICE_MULTIPLIER = 1.25;
+
+  const $$ = (sel, parent=document) => Array.from(parent.querySelectorAll(sel));
+  const $ = (sel, parent=document) => parent.querySelector(sel);
+
+  const toMoney = (num) => {
+    return (Math.round(num * 100) / 100).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  function parsePrice(text){
+    const match = (text||'').match(/([0-9]+(?:\.[0-9]+)?)/);
+    return match ? parseFloat(match[1]) : 0;
+  }
+
+  function formatPriceValue(value){
+    return `${toMoney(value)} $`;
+  }
+
+  function getItemFromCard(card){
+    const name = card.querySelector('h3')?.textContent?.trim() || '';
+    const desc = card.querySelector('.item-info p:not(.calories):not(.price)')?.textContent?.trim() || '';
+    const price = parsePrice(card.querySelector('.price')?.textContent || '0');
+    const img = card.querySelector('img')?.getAttribute('src') || '';
+    const section = card.closest('section');
+    const category = section ? section.id : '';
+    return { id: name, name, desc, price, img, category };
+  }
+
+  const CART_KEY = 'croissanji_cart_v1';
+  function loadCart(){
+    try{ return JSON.parse(localStorage.getItem(CART_KEY)||'{}'); }catch(_){ return {}; }
+  }
+  function saveCart(cart){ localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
+
+  function addToCart(item, qty){
+    const cart = loadCart();
+    const current = cart[item.id] || { ...item, qty: 0 };
+    current.qty = Math.min(99, Math.max(0, (current.qty||0) + qty));
+    if(current.qty <= 0){ delete cart[item.id]; } else { cart[item.id] = current; }
+    saveCart(cart);
+    renderCart();
+  }
+
+  function setQty(id, qty){
+    const cart = loadCart();
+    if(!cart[id]) return;
+    const next = Math.min(99, Math.max(0, qty));
+    if(next <= 0){ delete cart[id]; } else { cart[id].qty = next; }
+    saveCart(cart);
+    renderCart();
+  }
+
+  function clearCart(){ saveCart({}); renderCart(); }
+
+  function getOrderType(){
+    return localStorage.getItem(ORDER_TYPE_KEY) || '';
+  }
+
+  function isDeliveryMode(){
+    return getOrderType() === 'delivery';
+  }
+
+  function renderCart(){
+    const container = document.querySelector('#cart');
+    if(!container) return;
+    if(!isDeliveryMode()){
+      container.innerHTML = '';
+      return;
+    }
+    const cart = loadCart();
+    const entries = Object.values(cart);
+    if(entries.length === 0){
+      container.innerHTML = '<div class="cart"><h3>Your Cart</h3><div class="cart-empty">Your cart is empty.</div></div>';
+      return;
+    }
+    const COMBO_PRICE = 3;
+    const NO_COMBO_CATEGORIES = ['drinks', 'desserts'];
+    const lines = entries.map(item => {
+      const unitPrice = item.price + (item.combo ? COMBO_PRICE : 0);
+      const lineTotal = item.qty * unitPrice;
+      const comboLabel = item.combo ? ' <span style="color:#22c55e;font-size:11px;font-weight:700">COMBO</span>' : '';
+      const showCombo = !NO_COMBO_CATEGORIES.includes(item.category);
+      const comboBtn = showCombo ? `<button class="combo-toggle" style="margin-top:4px;font-size:11px;padding:3px 8px;border-radius:8px;border:1px solid var(--c-darkred);background:${item.combo ? 'var(--c-darkred)' : 'var(--c-cream)'};color:${item.combo ? 'var(--c-cream)' : 'var(--c-darkred)'};cursor:pointer;font-weight:600">${item.combo ? '✓ Combo (+$3)' : 'Make it Combo +$3'}</button>` : '';
+      return `\n        <div class="cart-line" data-id="${item.id}">\n          <div style="flex:1;min-width:0">\n            <div style="font-weight:600">${item.name}${comboLabel}</div>\n            <div class="muted" style="font-size:12px;color:#b9bec7">$${toMoney(unitPrice)} × ${item.qty}</div>\n            ${comboBtn}\n          </div>\n          <div class="qty">\n            <button class="dec">-</button>\n            <input class="qty-input" type="number" min="0" max="99" value="${item.qty}">\n            <button class="inc">+</button>\n          </div>\n          <div class="line-total">$${toMoney(lineTotal)}</div>\n          <button class="cart-delete" style="background:none;border:none;color:#ef4444;font-size:16px;cursor:pointer;padding:2px 6px;margin-left:4px;line-height:1" title="Remove item">&times;</button>\n        </div>`;
+    }).join('');
+    const subtotal = entries.reduce((s, it) => s + it.qty * (it.price + (it.combo ? COMBO_PRICE : 0)), 0);
+    container.innerHTML = `\n      <div class="cart">\n        <h3>Your Cart</h3>\n        ${lines}\n        <div class="cart-summary">\n          <div style="display:flex;justify-content:space-between;margin-top:4px">\n            <div>Subtotal</div><div style="font-weight:700">$${toMoney(subtotal)}</div>\n          </div>\n          <div class="checkout">\n            <button class="btn-clear" id="clearCart">Clear</button>\n            <button class="btn-wa" id="checkoutWa">Checkout</button>\n          </div>\n        </div>\n      </div>`;
+
+    // Bind qty controls
+    $$('.cart-line').forEach(line => {
+      const id = line.getAttribute('data-id');
+      line.querySelector('.dec')?.addEventListener('click', () => {
+        const cart = loadCart();
+        const q = (cart[id]?.qty||0) - 1;
+        setQty(id, q);
+      });
+      line.querySelector('.inc')?.addEventListener('click', () => {
+        const cart = loadCart();
+        const q = (cart[id]?.qty||0) + 1;
+        setQty(id, q);
+      });
+      line.querySelector('.qty-input')?.addEventListener('change', (e) => {
+        const v = parseInt(e.target.value || '0', 10);
+        setQty(id, isNaN(v) ? 0 : v);
+      });
+      line.querySelector('.combo-toggle')?.addEventListener('click', () => {
+        const cart = loadCart();
+        if(!cart[id]) return;
+        cart[id].combo = !cart[id].combo;
+        saveCart(cart);
+        renderCart();
+      });
+      line.querySelector('.cart-delete')?.addEventListener('click', () => {
+        setQty(id, 0);
+      });
+    });
+
+    $('#clearCart')?.addEventListener('click', clearCart);
+  }
+
+  function buildOrderMessage(customer = {}){
+    const cart = loadCart();
+    const lines = Object.values(cart);
+    if(lines.length === 0) return '';
+    const parts = [
+      'Hello Croissanji Team! 👋',
+      'I would like to place a delivery order.',
+      '',
+      '🧾 *Order Details*',
+      '------------------------------'
+    ];
+    const COMBO_PRICE = 3;
+    let subtotal = 0;
+    lines.forEach((it, idx) => {
+      const unitPrice = it.price + (it.combo ? COMBO_PRICE : 0);
+      const lineTotal = it.qty * unitPrice;
+      subtotal += lineTotal;
+      const comboTag = it.combo ? ' 🍟 *COMBO*' : '';
+      parts.push(`${idx + 1}. *${it.name}*${comboTag}`);
+      parts.push(`   Qty: ${it.qty} × $${toMoney(unitPrice)} = $${toMoney(lineTotal)}`);
+    });
+    parts.push(
+      '------------------------------',
+      `💵 *Subtotal:* $${toMoney(subtotal)}`,
+      '',
+      `👤 *Name:* ${customer.name || '-'}`,
+      `📍 *Delivery Address:* ${customer.address || '-'}`,
+      `📞 *Phone Number:* ${customer.phone || '-'}`,
+      `📝 *Notes:* ${customer.notes || '-'}`,
+      '',
+      'Thank you! 🙏'
+    );
+    return parts.join('\n');
+  }
+
+  function goToWhatsApp(customer){
+    const msg = buildOrderMessage(customer);
+    if(!msg){ alert('Your cart is empty.'); return; }
+    const encoded = encodeURIComponent(msg);
+    const url = `https://wa.me/${restaurantPhone}?text=${encoded}`;
+    window.location.href = url;
+  }
+
+  function setupCheckoutModal(){
+    const modal = $('#checkoutModal');
+    if(!modal) return;
+    const backBtn = $('#checkoutBack');
+    const submitBtn = $('#checkoutSubmit');
+    const nameInput = $('#customerName');
+    const addressInput = $('#customerAddress');
+    const phoneInput = $('#customerPhone');
+    const notesInput = $('#customerNotes');
+    const locationBtn = $('#shareLocationBtn');
+
+    const closeModal = () => modal.classList.add('hidden');
+    const openModal = () => modal.classList.remove('hidden');
+
+    backBtn?.addEventListener('click', closeModal);
+
+    // "Use My Location" button — gets GPS and fills a Google Maps link
+    locationBtn?.addEventListener('click', () => {
+      if(!navigator.geolocation){
+        alert('Geolocation is not supported by your browser.');
+        return;
+      }
+      locationBtn.textContent = '⏳ Getting location...';
+      locationBtn.disabled = true;
+
+      function onSuccess(pos){
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const mapLink = `https://maps.google.com/?q=${lat},${lng}`;
+        const current = (addressInput.value || '').trim();
+        addressInput.value = current ? current + '\n' + mapLink : mapLink;
+        locationBtn.textContent = '📍 Use My Location';
+        locationBtn.disabled = false;
+      }
+
+      function onError(err){
+        // If high-accuracy failed, retry with low accuracy as fallback
+        if(err.code === err.TIMEOUT || err.code === err.POSITION_UNAVAILABLE){
+          navigator.geolocation.getCurrentPosition(
+            onSuccess,
+            finalError,
+            { enableHighAccuracy: false, timeout: 20000, maximumAge: 300000 }
+          );
+          return;
+        }
+        finalError(err);
+      }
+
+      function finalError(err){
+        locationBtn.textContent = '📍 Use My Location';
+        locationBtn.disabled = false;
+        if(err.code === err.PERMISSION_DENIED){
+          alert(
+            'Location permission denied.\n\n' +
+            'To enable it:\n' +
+            '• iPhone: Go to Settings → Safari → Location → set to "Allow"\n' +
+            '• Android: Tap the lock icon in the address bar → Permissions → Location → Allow'
+          );
+        } else {
+          alert('Could not get your location. Please make sure Location Services are turned on in your device settings and try again.');
+        }
+      }
+
+      // First try with high accuracy, generous timeout for mobile
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        onError,
+        { enableHighAccuracy: true, timeout: 20000, maximumAge: 60000 }
+      );
+    });
+
+    submitBtn?.addEventListener('click', () => {
+      const customer = {
+        name: (nameInput?.value || '').trim(),
+        address: (addressInput?.value || '').trim(),
+        phone: (phoneInput?.value || '').trim(),
+        notes: (notesInput?.value || '').trim()
+      };
+      if(!customer.name || !customer.address || !customer.phone){
+        alert('Please fill name, address, and phone number.');
+        return;
+      }
+      closeModal();
+      goToWhatsApp(customer);
+    });
+
+    document.addEventListener('click', (e) => {
+      const target = e.target;
+      if(target && target.id === 'checkoutWa'){
+        e.preventDefault();
+        openModal();
+      }
+    });
+  }
+
+  function enhanceMenuCards(){
+    if(!isDeliveryMode()) return;
+    $$('.menu-item').forEach(card => {
+      if(card.querySelector('.add-row')) return;
+      const price = parsePrice(card.querySelector('.price')?.textContent || '0');
+      if(!price) return; // skip non-sale items
+      const row = document.createElement('div');
+      row.className = 'add-row';
+      row.style.marginTop = '6px';
+      row.innerHTML = `\n        <div style="display:flex;gap:8px;align-items:center">\n          <div class="qty">\n            <button class="minus">-</button>\n            <input class="qty-input" type="number" min="1" max="99" value="1">\n            <button class="plus">+</button>\n          </div>\n          <button class="add-btn" style="background:#22c55e;border:none;border-radius:10px;color:#111;padding:8px 10px;font-weight:700;cursor:pointer">Add to cart</button>\n        </div>`;
+      card.querySelector('.item-info')?.appendChild(row);
+      const qtyInput = row.querySelector('.qty-input');
+      row.querySelector('.minus')?.addEventListener('click',()=>{ qtyInput.value = String(Math.max(1, (parseInt(qtyInput.value||'1',10)||1)-1)); });
+      row.querySelector('.plus')?.addEventListener('click',()=>{ qtyInput.value = String(Math.min(99, (parseInt(qtyInput.value||'1',10)||1)+1)); });
+      row.querySelector('.add-btn')?.addEventListener('click', function(){
+        const btn = this;
+        const item = getItemFromCard(card);
+        const qty = Math.max(1, parseInt(qtyInput.value||'1', 10)||1);
+        addToCart(item, qty);
+        const orig = btn.textContent;
+        btn.textContent = 'Added ✓';
+        btn.style.background = '#166534';
+        btn.style.color = '#fff';
+        btn.style.transform = 'scale(1.08)';
+        btn.style.transition = 'all 0.2s ease';
+        btn.disabled = true;
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.style.background = '#22c55e';
+          btn.style.color = '#111';
+          btn.style.transform = 'scale(1)';
+          btn.disabled = false;
+        }, 900);
+      });
+    });
+  }
+
+  function applyPriceIncrease(){
+    $$('.price').forEach(priceEl => {
+      if(priceEl.dataset.updatedPrice === '1') return;
+      const base = parsePrice(priceEl.textContent || '0');
+      if(!base) return;
+      const updated = Math.round(base * PRICE_MULTIPLIER * 100) / 100;
+      priceEl.textContent = formatPriceValue(updated);
+      priceEl.dataset.updatedPrice = '1';
+      priceEl.dataset.basePrice = String(base);
+    });
+  }
+
+  function setupOrderTypeModal(){
+    const modal = $('#orderTypeModal');
+    if(!modal) return;
+    localStorage.removeItem(ORDER_TYPE_KEY);
+    const deliveryBtn = $('#selectDelivery');
+    const tableBtn = $('#selectTable');
+
+    const applyChoice = (choice) => {
+      localStorage.setItem(ORDER_TYPE_KEY, choice);
+      if(choice !== 'delivery') clearCart();
+      modal.classList.add('hidden');
+      applyPriceIncrease();
+      enhanceMenuCards();
+      renderCart();
+    };
+
+    deliveryBtn?.addEventListener('click', () => applyChoice('delivery'));
+    tableBtn?.addEventListener('click', () => applyChoice('table'));
+    modal.classList.remove('hidden');
+  }
+
+  function filterByHash(){
+    const hash = (location.hash||'').replace('#','');
+    const sections = $$('#breakfast, #dinner_chicken, #dinner_beef, #burgers, #meals, #healthy_meals, #appetizers, #side_orders, #drinks, #desserts, #mini');
+    if(!hash){
+      sections.forEach(s => s.style.display = '');
+      return;
+    }
+    sections.forEach(s => {
+      s.style.display = (s.id === hash) ? '' : 'none';
+    });
+    // Scroll to selected section header for better UX
+    const target = document.getElementById(hash);
+    if(target){ target.scrollIntoView({behavior:'smooth', block:'start'}); }
+  }
+
+  function setupNavButtons(){
+    // Rewire nav buttons to change hash instead of manual scroll so it works cross page
+    $$('.category-link').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const id = btn.getAttribute('data-target');
+        if(!id) return;
+        location.hash = id;
+      });
+    });
+  }
+
+  function init(){
+    setupOrderTypeModal();
+    setupCheckoutModal();
+    applyPriceIncrease();
+    enhanceMenuCards();
+    renderCart();
+    filterByHash();
+    setupNavButtons();
+    window.addEventListener('hashchange', filterByHash);
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', init);
+  } else { init(); }
+})();
+
+
