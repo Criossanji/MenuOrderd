@@ -1,8 +1,6 @@
 (function(){
   const restaurantPhone = '96170673328';
   const ORDER_TYPE_KEY = 'croissanji_order_type_v1';
-  const PRICE_MULTIPLIER = 1.25;
-
   const $$ = (sel, parent=document) => Array.from(parent.querySelectorAll(sel));
   const $ = (sel, parent=document) => parent.querySelector(sel);
 
@@ -296,18 +294,6 @@
     });
   }
 
-  function applyPriceIncrease(){
-    $$('.price').forEach(priceEl => {
-      if(priceEl.dataset.updatedPrice === '1') return;
-      const base = parsePrice(priceEl.textContent || '0');
-      if(!base) return;
-      const updated = Math.round(base * PRICE_MULTIPLIER * 100) / 100;
-      priceEl.textContent = formatPriceValue(updated);
-      priceEl.dataset.updatedPrice = '1';
-      priceEl.dataset.basePrice = String(base);
-    });
-  }
-
   function setupOrderTypeModal(){
     const modal = $('#orderTypeModal');
     if(!modal) return;
@@ -319,7 +305,6 @@
       localStorage.setItem(ORDER_TYPE_KEY, choice);
       if(choice !== 'delivery') clearCart();
       modal.classList.add('hidden');
-      applyPriceIncrease();
       enhanceMenuCards();
       renderCart();
     };
@@ -359,7 +344,6 @@
   function init(){
     setupOrderTypeModal();
     setupCheckoutModal();
-    applyPriceIncrease();
     enhanceMenuCards();
     renderCart();
     filterByHash();
