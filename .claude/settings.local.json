@@ -3,7 +3,22 @@
     "allow": [
       "Bash(git init *)",
       "Bash(git add *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(git remote *)",
+      "Bash(git branch *)",
+      "Bash(git push *)",
+      "Bash(data)",
+      "Bash(menu)",
+      "Bash(price)",
+      "Bash(item\")",
+      "PowerShell(Get-ChildItem -Path \"C:\\\\wamp64\\\\www\\\\Criossnajimenudekwneh\" -Recurse -File | Where-Object {$_.Extension -match '\\\\.\\(db|sqlite|json|xml|csv|txt\\)$'})",
+      "Bash(cp \"c:/Users/Tech Nation/Downloads/IMG_2888.PNG\" images/brisket-burger.png)",
+      "Bash(cp \"c:/Users/Tech Nation/Downloads/IMG_2883.PNG\" images/truffle-burger.png)",
+      "Bash(cp \"c:/Users/Tech Nation/Downloads/IMG_2885.PNG\" images/blue-cheese-burger.png)",
+      "Bash(cp \"c:/Users/Tech Nation/Downloads/IMG_2881.PNG\" images/mushroom-swiss-burger.png)",
+      "Bash(git pull *)",
+      "Bash(git stash *)",
+      "Bash(python apply_macros.py)"
     ]
   }
 }
